@@ -2,3 +2,6 @@ target/
 .idea/
 *.iml
 .DS_Store
+
+# Optional local helper (create on your machine; not part of the published library)
+scripts/publish-to-github-com.sh
