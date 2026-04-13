@@ -1,0 +1,1 @@
+Lists the names of files and subdirectories at a path inside the workspace. Use "." for the workspace root. Helps you see what already exists before creating or overwriting files (similar in spirit to a directory listing / glob preview in other deep agent stacks).

@@ -1,0 +1,1 @@
+Creates or overwrites a text file under the workspace. Parent directories are created if needed. Prefer edit_file when making targeted changes to an existing file unless you are intentionally replacing the whole file. Only use emojis in file contents if the user explicitly asked for them.

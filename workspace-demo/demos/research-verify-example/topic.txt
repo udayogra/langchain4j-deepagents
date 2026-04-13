@@ -1,0 +1,1 @@
+Benefits and risks of serverless databases for small teams — enough depth to brief stakeholders, then repackage for LinkedIn and Facebook (demo: general knowledge only, no live web).

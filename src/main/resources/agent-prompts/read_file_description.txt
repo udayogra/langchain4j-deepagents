@@ -1,0 +1,9 @@
+Reads a text file from the workspace sandbox.
+
+**JSON arguments (must match the tool schema):** use the string property **`path`** exactly — required. Do not use `file_path` or other names; unrecognized keys are ignored and the read will fail.
+
+**Path:** relative to the workspace root (e.g. `research/brief.md`). Absolute paths are accepted only if they still resolve inside the same workspace.
+
+**Behavior:** returns raw UTF-8 content. If the path is missing, not a file, or escapes the workspace, an error string is returned. Very large files may be rejected (see harness limit).
+
+**Tip:** you may call read_file for multiple paths in one assistant turn when batching helps.
