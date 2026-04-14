@@ -1,8 +1,16 @@
 # langchain4j-deepagents
 
-**Java 17+** — build a tool-using agent with [LangChain4j](https://github.com/langchain4j/langchain4j): a workspace on disk, a todo list, file helpers, and optional helpers for skills and sub-agents. No extra frameworks.
+A **small agent harness for Java**—opinionated and ready to run—so you are not wiring prompts, tool schemas, and context management yourself. You get a working **tool-using** orchestrator first, then customize workspace, model, sub-agents, and extras.
 
-The idea matches the “deep agent” pattern from projects like [deepagents](https://github.com/langchain-ai/deepagents) (Python) and [langgraph4j-deepagents](https://github.com/langgraph4j/langgraph4j-deepagents); this repo is a small LangChain4j-only take on that shape. **What you get concretely** is in the next section.
+The design follows the same goals as **[LangChain deepagents](https://github.com/langchain-ai/deepagents)** (Python): *“Agent harness built with LangChain and LangGraph… planning tool, filesystem backend, and the ability to spawn subagents.”* This repo is a **LangChain4j-only** take on that shape (**Java 17+**, no Spring, no LangGraph dependency).
+
+**What’s included** (aligned with the upstream harness idea):
+
+- **Planning** — `write_todos` for task breakdown and progress  
+- **Filesystem** — `list_dir`, `read_file`, `write_file`, `edit_file` against a sandbox workspace  
+- **Sub-agents** — `task` to delegate work with an isolated sub-prompt (and optional tools)  
+- **Optional skills** — folders with `SKILL.md`, surfaced as a catalog; full text via `read_file`  
+- **Defaults** — orchestrator + sub-agent prompts aimed at using those tools effectively; bounded chat memory via LangChain4j  
 
 ---
 
