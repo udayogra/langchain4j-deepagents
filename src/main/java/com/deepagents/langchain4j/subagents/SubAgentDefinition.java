@@ -19,7 +19,7 @@ import java.util.Objects;
  * from the parent config, then {@link #extraTools()} for this definition. Avoid tool names that collide with built-ins
  * ({@code task}, {@code write_todos}, file tools) unless you intend to replace them.
  *
- * @param name        Unique id matching {@code subAgentType} in tool calls.
+ * @param name        Unique id matching {@code subagent_type} in {@code task} tool calls (legacy {@code subAgentType} also accepted).
  * @param description Shown to the orchestrator model inside the {@code task} tool description.
  * @param systemPrompt Instructions for the sub-agent (does not inherit the orchestrator system prompt).
  * @param useBuiltInFileTools When true, the sub-agent receives the harness built-in workspace file tools (same map as the orchestrator’s file sandbox).

@@ -142,6 +142,7 @@ public final class ResearchGatherVerifySocialDraftsDemo {
     }
 
     public static void main(String[] args) throws Exception {
+        System.err.println(">>> Running " + ResearchGatherVerifySocialDraftsDemo.class.getName());
         OpenAiChatModelConfig modelConfig;
         try {
             modelConfig = OpenAiChatModelConfig.fromRequiredEnvironment();

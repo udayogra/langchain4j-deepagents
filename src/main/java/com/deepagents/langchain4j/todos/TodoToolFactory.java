@@ -16,8 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * Single {@code write_todos} tool (full list replacement per call), aligned with LangChain
- * {@code TodoListMiddleware} / Python {@code write_todos}.
+ * Single {@code write_todos} tool (full list replacement per call), aligned with LangChain JS
+ * {@code todoListMiddleware} ({@code WRITE_TODOS_DESCRIPTION}) / Python {@code write_todos}.
  *
  * <p>For multi-user apps, use {@link #buildPerMemoryId()} or {@link #build(Function)} so each {@link
  * dev.langchain4j.service.MemoryId} gets its own {@link TodoStore}.

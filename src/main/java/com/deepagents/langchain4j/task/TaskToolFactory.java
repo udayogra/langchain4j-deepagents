@@ -16,7 +16,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Builds the dynamic {@code task} tool: description lists sub-agents; executor dispatches by {@code subAgentType}.
+ * Builds the dynamic {@code task} tool: description lists sub-agents; executor dispatches by {@code subagent_type}
+ * (deepagentsjs / LangChain schema); {@code subAgentType} is accepted for backward compatibility.
  */
 public final class TaskToolFactory {
 
@@ -26,8 +27,8 @@ public final class TaskToolFactory {
 
     /**
      * @param runtimesByName must include {@code general-purpose}
-     * @param definitionsForDescription all registered sub-agents (used to list <em>extra</em> agents in the task
-     *     description; general-purpose is already in the ported prefix text)
+     * @param definitionsForDescription all registered sub-agents (each appears as {@code - name: description} in the task
+     *     tool text, same order as registration)
      * @param flowListener optional; notified when the orchestrator calls {@code task} (before/after sub-agent run)
      */
     public static Map<ToolSpecification, ToolExecutor> create(
@@ -39,8 +40,7 @@ public final class TaskToolFactory {
             throw new IllegalArgumentException("runtimesByName must include 'general-purpose'");
         }
 
-        String extraBullets = TaskToolDescriptions.buildExtraSubAgentBulletList(definitionsForDescription);
-        String description = TaskToolDescriptions.buildTaskToolDescription(extraBullets);
+        String description = TaskToolDescriptions.buildTaskToolDescription(definitionsForDescription);
 
         String namesHint = runtimesByName.keySet().stream().sorted().collect(Collectors.joining(", "));
 
@@ -50,11 +50,11 @@ public final class TaskToolFactory {
                 .parameters(JsonObjectSchema.builder()
                         .addStringProperty(
                                 "description",
-                                "Detailed task for the sub-agent, including expected output format.")
+                                "The task to execute with the selected agent")
                         .addStringProperty(
-                                "subAgentType",
-                                "Agent type name. Available: " + namesHint)
-                        .required("description", "subAgentType")
+                                "subagent_type",
+                                "Name of the agent to use. Available: " + namesHint)
+                        .required("description", "subagent_type")
                         .build())
                 .build();
 
@@ -62,13 +62,16 @@ public final class TaskToolFactory {
             try {
                 JsonNode n = JSON.readTree(request.arguments());
                 String task = n.path("description").asText("");
-                String type = n.path("subAgentType").asText("").trim();
+                String type = n.path("subagent_type").asText("").trim();
+                if (type.isBlank()) {
+                    type = n.path("subAgentType").asText("").trim();
+                }
                 if (task.isBlank()) {
                     return "Error: description must not be empty";
                 }
                 SubAgentRuntime agent = runtimesByName.get(type);
                 if (agent == null) {
-                    return "Error: unknown subAgentType '" + type + "'. Available: " + namesHint;
+                    return "Error: unknown subagent_type '" + type + "'. Available: " + namesHint;
                 }
                 String taskForListener = null;
                 if (flowListener != null) {

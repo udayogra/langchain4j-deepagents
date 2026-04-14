@@ -3,6 +3,7 @@ package com.deepagents.langchain4j.demos;
 import com.deepagents.langchain4j.DeepAgent;
 import com.deepagents.langchain4j.config.DeepAgentConfig;
 import com.deepagents.langchain4j.config.OpenAiChatModelConfig;
+import com.deepagents.langchain4j.logging.ToolInvocationLogMode;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -40,6 +41,8 @@ public final class SkillsMarkdownCatalogProgressiveDisclosureDemo {
     private SkillsMarkdownCatalogProgressiveDisclosureDemo() {}
 
     public static void main(String[] args) throws Exception {
+        System.err.println(
+                ">>> Running " + SkillsMarkdownCatalogProgressiveDisclosureDemo.class.getName());
         OpenAiChatModelConfig modelConfig;
         try {
             modelConfig = OpenAiChatModelConfig.fromRequiredEnvironment();
@@ -53,6 +56,7 @@ public final class SkillsMarkdownCatalogProgressiveDisclosureDemo {
                         .workspace(WORKSPACE)
                         .openAi(modelConfig)
                         .skillSourceRoots(SKILL_SOURCE_ROOTS)
+                        .toolInvocationLogMode(ToolInvocationLogMode.DEBUG)
                         .build();
         DeepAgent.Orchestrator agent = DeepAgent.create(harnessConfig);
         System.out.println(agent.chat(SESSION_ID, USER_MESSAGE));

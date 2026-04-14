@@ -66,8 +66,7 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.5.0</version>
         <configuration>
-          <!-- Default main; override without editing POM: mvn -q compile exec:java -Dexec.mainClass=com.deepagents.langchain4j.demos.ResearchGatherVerifySocialDraftsDemo -->
-          <mainClass>com.deepagents.langchain4j.demos.BrokenStatsJavaCodeReviewTodosFilesAndSubagentsDemo</mainClass>
+          <mainClass>${exec.mainClass}</mainClass>
         </configuration>
       </plugin>
     </plugins>

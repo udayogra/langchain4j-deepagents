@@ -10,6 +10,7 @@ The design follows the same goals as **[LangChain deepagents](https://github.com
 - **Filesystem** — `list_dir`, `read_file`, `write_file`, `edit_file` against a sandbox workspace  
 - **Sub-agents** — `task` to delegate work with an isolated sub-prompt (and optional tools)  
 - **Optional skills** — folders with `SKILL.md`, surfaced as a catalog; full text via `read_file`  
+- **Optional agent memory** — markdown files (e.g. `AGENTS.md`) loaded into the system prompt; see [Agent memory](#agent-memory-agentsmd)  
 - **Defaults** — orchestrator + sub-agent prompts aimed at using those tools effectively; bounded chat memory via LangChain4j  
 
 ---
@@ -78,6 +79,7 @@ You must set **exactly one** of:
 | **`workspace(Path)`** | **Required.** The **root folder** for all built-in file tools (`list_dir`, `read_file`, `write_file`, `edit_file`). Paths the model passes to those tools are **relative to this directory**, and the implementation keeps access **inside** that tree—so this is your **safety boundary** for disk access.<br><br>Think of it as the agent’s **project directory** (source files, generated output, skill trees under `skillSourceRoots`, etc.). If the path does not exist yet, it is **created**.<br><br>**Note:** every chat session (`memoryId`) uses the **same** workspace unless you point different configs at different paths; split workspaces when you need **per-tenant or per-job** file isolation. |
 | **`instructions(String)`** | Optional text **prepended** before the library’s default orchestrator system message (and before any skills catalog). |
 | **`addSkillSourceRoot` / `skillSourceRoots`** | Optional. Each root is a directory **inside** the workspace; immediate subfolders that contain `SKILL.md` are listed in the system prompt (see [Skills](#skills)). |
+| **`addMemorySource` / `memorySources`** | Optional. Markdown files **inside** the workspace whose contents are injected as agent memory (see [Agent memory](#agent-memory-agentsmd)). |
 | **`addSubAgent` / `subAgents`** | Optional specialists exposed as `task` targets (see [Sub-agents](#sub-agents)). `general-purpose` is always registered. |
 | **`chatMemoryMaxMessages(int)`** | Orchestrator window size; default **48**. |
 | **`maxSequentialToolInvocations(int)`** | Cap on tool steps per model turn; default **35**. |
@@ -151,6 +153,25 @@ DeepAgentConfig config =
 DeepAgent.Orchestrator agent = DeepAgent.create(config);
 ```
 
+### Agent memory (`AGENTS.md`)
+
+**What it is:** Memory is extra context you keep in markdown files (often called [AGENTS.md](https://agents.md/)). It is project- or team-specific instructions—how to build, style rules, architecture notes—so the agent always sees them. Skills are optional playbooks you open when needed; memory is **always included** in the system prompt when you configure it.
+
+**How you specify it:** Pass one or more file paths with **`addMemorySource(Path)`** or **`memorySources(List)`** on **`DeepAgentConfig`**. In this library, each path must live **inside your `workspace`** (relative to it, or absolute but still under that root) so the same **`edit_file`** / **`read_file`** sandbox can update it. Paths are read **in order**; contents are **combined** in that order (later files appear after earlier ones). If a path is missing, it is skipped. If you listed sources but nothing could be read, the prompt says there is no memory yet.
+
+**Loading and changing:** Content is read when you call **`DeepAgent.create`**. It is injected into the main agent and sub-agents, together with short guidelines (same idea as [deepagentsjs `memory.ts`](https://github.com/langchain-ai/deepagentsjs/blob/main/libs/deepagents/src/middleware/memory.ts)) on when to update memory using **`edit_file`**. Memory is **not frozen forever**: you can change it whenever you need to—edit the markdown yourself, let the model update files with **`edit_file`** when that fits, or adjust **`memorySources`** and rebuild. The text baked into a **running** `Orchestrator`’s system message does **not** auto-refresh every turn; after a disk change, call **`DeepAgent.create`** again (or start a new process) so the next session picks up the latest files.
+
+Runnable example: **`AgentMemoryAgentsMdDemo`** (loads `workspace-demo/demos/agent-memory-sample/AGENTS.md`; see [Run bundled demos](#run-bundled-demos)).
+
+```java
+DeepAgentConfig.builder()
+        .workspace(workspace)
+        .chatModel(model)
+        .addMemorySource(Path.of("AGENTS.md"))
+        .addMemorySource(Path.of(".deepagents/AGENTS.md"))
+        .build();
+```
+
 ---
 
 ## Sub-agents
@@ -182,7 +203,7 @@ DeepAgentConfig config =
 
 | Field | Role |
 |-------|------|
-| `name` | Used as `subAgentType` in the `task` tool; cannot be `general-purpose`. |
+| `name` | Used as `subagent_type` in the `task` tool (deepagentsjs / LangChain); cannot be `general-purpose`. |
 | `description` | Shown in the orchestrator’s `task` tool so the model knows when to delegate. |
 | `prompt` | Sub-agent system message; **does not** inherit the orchestrator system prompt. |
 | `builtInFileTools` | Default `true` — same file tools as the orchestrator; set `false` for text-only. |
@@ -193,11 +214,11 @@ DeepAgentConfig config =
 ```json
 {
   "description": "Read sample/Foo.java and list correctness issues only.",
-  "subAgentType": "reviewer"
+  "subagent_type": "reviewer"
 }
 ```
 
-`subAgentType` must be `general-purpose` or one of your definition names.
+`subagent_type` must be `general-purpose` or one of your definition names. The executor still accepts legacy `subAgentType` if the model emits it.
 
 ### `write_todos` — JSON shape
 
@@ -302,17 +323,20 @@ Runnable `main` classes under **`com.deepagents.langchain4j.demos`** use **`./wo
 | `BrokenStatsJavaCodeReviewTodosFilesAndSubagentsDemo` | Default `exec:java`. Todos, files, **`bug-finder`** + **`performance-reviewer`**. |
 | `SkillsMarkdownCatalogProgressiveDisclosureDemo` | Skills under `workspace-demo/demos/skills-sample/`. |
 | `ResearchGatherVerifySocialDraftsDemo` | Research-style sub-agents + skills under `workspace-demo/demos/research-verify-example/`. |
+| `AgentMemoryAgentsMdDemo` | Agent memory from `workspace-demo/demos/agent-memory-sample/AGENTS.md`. |
+
+**Which `main` ran?** Plain `mvn exec:java` uses the POM property default (`BrokenStatsJavaCodeReviewTodosFilesAndSubagentsDemo`). The plugin config uses **`<mainClass>${exec.mainClass}</mainClass>`** so `-Dexec.mainClass=...` works (a **literal** `<mainClass>` in the exec plugin XML is **not** overridden by `-Dexec.mainClass` in exec-maven-plugin 3.x). Keep `-Dexec.mainClass` on **one line** so the shell does not split the command. Each demo prints `>>> Running fully.qualified.ClassName` to **stderr** at startup.
 
 ```bash
 export OPENAI_API_KEY=sk-...
 
 mvn -q compile exec:java
 
-mvn -q compile exec:java \
-  -Dexec.mainClass=com.deepagents.langchain4j.demos.SkillsMarkdownCatalogProgressiveDisclosureDemo
+mvn -q compile exec:java -Dexec.mainClass=com.deepagents.langchain4j.demos.SkillsMarkdownCatalogProgressiveDisclosureDemo
 
-mvn -q compile exec:java \
-  -Dexec.mainClass=com.deepagents.langchain4j.demos.ResearchGatherVerifySocialDraftsDemo
+mvn -q compile exec:java -Dexec.mainClass=com.deepagents.langchain4j.demos.ResearchGatherVerifySocialDraftsDemo
+
+mvn -q compile exec:java -Dexec.mainClass=com.deepagents.langchain4j.demos.AgentMemoryAgentsMdDemo
 ```
 
 ---
@@ -328,6 +352,7 @@ mvn -q compile exec:java \
 | `com.deepagents.langchain4j.todos` | `TodoToolFactory`, models |
 | `com.deepagents.langchain4j.task` | `TaskToolFactory` |
 | `com.deepagents.langchain4j.skills` | Scan + format skills catalog |
+| `com.deepagents.langchain4j.memory` | `AgentMemoryLoader` (AGENTS.md-style injection) |
 | `com.deepagents.langchain4j.flow` | `DeepAgentFlowListener`, `DeepAgentFlowRecorder` |
 | `com.deepagents.langchain4j.logging` | `ToolInvocationLogMode` |
 | `com.deepagents.langchain4j.demos` | Runnable examples |

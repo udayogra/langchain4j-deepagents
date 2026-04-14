@@ -1,7 +1,7 @@
 package com.deepagents.langchain4j.task;
 
 import com.deepagents.langchain4j.DeepAgent;
-import com.deepagents.langchain4j.subagents.SubAgentDefinition;
+import com.deepagents.langchain4j.Prompts;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,6 +15,12 @@ class TaskToolDescriptionsTest {
         var defs =
                 List.of(
                         DeepAgent.SubAgent.builder()
+                                .name("general-purpose")
+                                .description(Prompts.DEFAULT_GENERAL_PURPOSE_DESCRIPTION)
+                                .prompt("sys")
+                                .builtInFileTools(false)
+                                .build(),
+                        DeepAgent.SubAgent.builder()
                                 .name("alpha")
                                 .description("Does A")
                                 .prompt("sys")
@@ -26,10 +32,11 @@ class TaskToolDescriptionsTest {
                                 .prompt("sys")
                                 .builtInFileTools(false)
                                 .build());
-        String bullets = TaskToolDescriptions.buildExtraSubAgentBulletList(defs);
-        String full = TaskToolDescriptions.buildTaskToolDescription(bullets);
+        String full = TaskToolDescriptions.buildTaskToolDescription(defs);
+        assertTrue(full.contains("- general-purpose:"));
         assertTrue(full.contains("- alpha: Does A"));
         assertTrue(full.contains("- beta: Does B"));
-        assertTrue(full.contains("Launch a new agent"));
+        assertTrue(full.contains("Launch an ephemeral subagent"));
+        assertTrue(full.contains("Lebron James"));
     }
 }

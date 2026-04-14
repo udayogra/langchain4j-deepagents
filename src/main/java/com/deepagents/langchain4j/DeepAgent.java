@@ -11,6 +11,7 @@ import com.deepagents.langchain4j.subagents.SubAgentDefinition;
 import com.deepagents.langchain4j.subagents.SubAgentRuntime;
 import com.deepagents.langchain4j.task.TaskToolFactory;
 import com.deepagents.langchain4j.todos.TodoToolFactory;
+import com.deepagents.langchain4j.memory.AgentMemoryLoader;
 import com.deepagents.langchain4j.skills.SkillsPromptFormatter;
 import com.deepagents.langchain4j.skills.SkillsScanner;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -31,7 +32,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Wires an orchestrator {@link AiServices} with todos, workspace files, and a {@code task} tool (sub-agents).
+ * Wires an orchestrator {@link AiServices} with todos, workspace files, optional {@link DeepAgentConfig#memorySources()}
+ * (AGENTS.md-style context), and a {@code task} tool (sub-agents).
  * Use {@link #create(DeepAgentConfig)} as the single entry point. Optional {@link DeepAgentConfig#additionalTools()}
  * are merged with built-ins on the main agent and shared with every sub-agent; use {@link SubAgentDefinition#extraTools()}
  * for per-sub-agent tools only. Pure LangChain4j — no Spring AI.
@@ -47,16 +49,18 @@ public final class DeepAgent {
         String chat(@MemoryId String sessionId, @UserMessage String userMessage);
     }
 
+    /** Verbatim deepagentsjs {@code DEFAULT_SUBAGENT_PROMPT} ({@code subagents.ts}). */
     private static final String GENERAL_PURPOSE_BODY =
-            """
-            You are a general-purpose sub-agent. When the task involves files in the workspace, read or change them as needed.
-            Produce a clear final answer in plain text; the orchestrator only sees this result.
-            """;
+            "In order to complete the objective that the user asks of you, you have access to a number of standard tools.";
 
-    private static String subAgentSystemWithSkillsSection(String basePrompt, String skillsSection) {
+    private static String subAgentSystemWithSkillsAndMemory(
+            String basePrompt, String skillsSection, String agentMemorySection) {
         String s = basePrompt + Prompts.NON_INTERACTIVE_SUBAGENT;
         if (skillsSection != null && !skillsSection.isBlank()) {
             s = s + "\n\n" + skillsSection;
+        }
+        if (agentMemorySection != null && !agentMemorySection.isBlank()) {
+            s = s + "\n\n" + agentMemorySection;
         }
         return s;
     }
@@ -76,6 +80,7 @@ public final class DeepAgent {
         return createImpl(
                 model,
                 config.workspace(),
+                config.memorySources(),
                 config.skillSourceRoots(),
                 config.subAgents(),
                 config.chatMemoryMaxMessages(),
@@ -89,6 +94,7 @@ public final class DeepAgent {
     private static Orchestrator createImpl(
             ChatModel model,
             Path workspace,
+            List<Path> memorySources,
             List<Path> skillSourceRoots,
             List<SubAgentDefinition> extraSubAgents,
             int chatMemoryMaxMessages,
@@ -111,10 +117,20 @@ public final class DeepAgent {
                 skillsSection.isBlank()
                         ? Prompts.ORCHESTRATOR_SYSTEM
                         : Prompts.ORCHESTRATOR_SYSTEM + "\n\n" + skillsSection;
-        String orchestratorSystem =
-                orchestratorInstructionsPrefix == null || orchestratorInstructionsPrefix.isBlank()
+        List<Path> memSources = memorySources == null ? List.of() : memorySources;
+        String agentMemorySection = AgentMemoryLoader.buildPromptSection(workspace, memSources);
+        String baseWithSkillsAndMemory =
+                agentMemorySection.isBlank()
                         ? baseWithSkills
-                        : orchestratorInstructionsPrefix.strip() + "\n\n" + baseWithSkills;
+                        : baseWithSkills + "\n\n" + agentMemorySection;
+        final String orchestratorSystem =
+                (orchestratorInstructionsPrefix == null || orchestratorInstructionsPrefix.isBlank()
+                        ? baseWithSkillsAndMemory
+                        : orchestratorInstructionsPrefix.strip() + "\n\n" + baseWithSkillsAndMemory)
+                        + "\n\n"
+                        + Prompts.TODO_LIST_MIDDLEWARE_SYSTEM
+                        + "\n\n"
+                        + Prompts.TASK_SYSTEM_PROMPT;
         if (flowListener != null) {
             flowListener.onOrchestratorSystemReady(orchestratorSystem);
         }
@@ -129,7 +145,8 @@ public final class DeepAgent {
                 "general-purpose",
                 new SubAgentRuntime(
                         model,
-                        subAgentSystemWithSkillsSection(GENERAL_PURPOSE_BODY, skillsSection),
+                        subAgentSystemWithSkillsAndMemory(
+                                GENERAL_PURPOSE_BODY, skillsSection, agentMemorySection),
                         mergeSubAgentTools(true, fileTools, sharedAdditional, Map.of()),
                         "sub-agent:general-purpose",
                         toolInvocationLogMode,
@@ -140,7 +157,8 @@ public final class DeepAgent {
                 SubAgent.builder()
                         .name("general-purpose")
                         .description(Prompts.DEFAULT_GENERAL_PURPOSE_DESCRIPTION)
-                        .prompt(subAgentSystemWithSkillsSection(GENERAL_PURPOSE_BODY, skillsSection))
+                        .prompt(subAgentSystemWithSkillsAndMemory(
+                                GENERAL_PURPOSE_BODY, skillsSection, agentMemorySection))
                         .build());
 
         for (SubAgentDefinition d : extraSubAgents) {
@@ -156,7 +174,8 @@ public final class DeepAgent {
                     d.name(),
                     new SubAgentRuntime(
                             model,
-                            subAgentSystemWithSkillsSection(d.systemPrompt(), skillsSection),
+                            subAgentSystemWithSkillsAndMemory(
+                                    d.systemPrompt(), skillsSection, agentMemorySection),
                             subTools,
                             "sub-agent:" + d.name(),
                             toolInvocationLogMode,

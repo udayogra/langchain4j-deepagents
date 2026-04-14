@@ -143,4 +143,15 @@ class TodoToolFactoryTest {
         assertEquals(TodoStatus.PENDING, TodoStatus.parseApi("PENDING"));
         assertThrows(IllegalArgumentException.class, () -> TodoStatus.parseApi("bogus"));
     }
+
+    @Test
+    void writeTodos_toolDescription_includesLangChainJsStyleExamples() {
+        Map<ToolSpecification, ToolExecutor> tools = TodoToolFactory.buildPerMemoryId();
+        ToolSpecification spec =
+                tools.keySet().stream().filter(t -> "write_todos".equals(t.name())).findFirst().orElseThrow();
+        String desc = spec.description();
+        assertTrue(desc.contains("dark mode toggle"), desc);
+        assertTrue(desc.contains("Examples of When NOT to Use the Todo List"), desc);
+        assertTrue(desc.contains("Tool implementation:"), desc);
+    }
 }

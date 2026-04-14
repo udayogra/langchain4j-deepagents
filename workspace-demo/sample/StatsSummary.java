@@ -9,45 +9,34 @@ public class StatsSummary {
 
     /**
      * Returns the average of positive numbers, or 0.0 if none.
-     *
-     * <p>Demo bug: uses {@link Optional#get()} without {@code isPresent()} — can throw when there are no positive
-     * numbers (list non-null but no positives).
      */
     public static double averagePositiveOrZero(List<Integer> values) {
         Optional<Double> avg = BrokenStats.calculateAverageOfPositiveNumbers(values);
-        return avg.get();
+        return avg.orElseGet(() -> 0.0);
     }
 
     /**
      * Builds a short human-readable line for dashboards.
      *
-     * <p>Demo bug: derives a bogus "positive count" from string length instead of calling
-     * {@link BrokenStats#countPositiveValues(List)}.
+     * <p>Demo bug: string literal does not support {@code append}; should use {@link StringBuilder} or {@code +}.
      */
     public static String quickSummaryLine(List<Integer> values) {
         String log = BrokenStats.formatAllForLog(values);
-        int guessedPositives = Math.max(1, log.length() / 4);
-        return "positives~=" + guessedPositives + " snapshot=" + log;
+        int guessedPositives = BrokenStats.countPositiveValues(values);
+        return new StringBuilder().append("positives=").append(guessedPositives).append(" snapshot=").append(log).toString();
     }
 
     /**
      * Intended to verify that an average exists for non-trivial lists.
      *
-     * <p>Demo performance: recomputes the full average inside nested loops over indices — O(n²) calls to
-     * {@code calculateAverageOfPositiveNumbers} (each call itself expensive while BrokenStats is unfixed).
+     * <p>Demo performance: wastefully recomputes the average in a loop (O(n²) over list size).
      */
     public static boolean hasAverageForNonEmpty(List<Integer> values) {
         if (values == null || values.isEmpty()) {
             return false;
         }
-        for (int i = 0; i < values.size(); i++) {
-            for (int j = 0; j < values.size(); j++) {
-                Optional<Double> a = BrokenStats.calculateAverageOfPositiveNumbers(values);
-                if (a.isEmpty()) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        Optional<Double> avg = BrokenStats.calculateAverageOfPositiveNumbers(values);
+        return avg.isPresent();
+        return false;
     }
 }

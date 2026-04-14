@@ -17,7 +17,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * End-user configuration for {@link com.deepagents.langchain4j.DeepAgent}: workspace, optional skills roots,
+ * End-user configuration for {@link com.deepagents.langchain4j.DeepAgent}: workspace, optional skills roots, optional
+ * agent memory files ({@link #memorySources()} — e.g. {@code AGENTS.md} under the workspace, deepagentsjs-style),
  * {@code task} sub-agents, optional {@link #additionalTools()} (merged into the orchestrator and every sub-agent, like
  * Python {@code create_deep_agent(..., tools=...)}), and either a minimal OpenAI config or a pre-built {@link ChatModel}.
  *
@@ -45,6 +46,7 @@ public final class DeepAgentConfig {
     public static final ToolInvocationLogMode DEFAULT_TOOL_INVOCATION_LOG_MODE = ToolInvocationLogMode.INFO;
 
     private final Path workspace;
+    private final List<Path> memorySources;
     private final List<Path> skillSourceRoots;
     private final List<SubAgentDefinition> subAgents;
     private final OpenAiChatModelConfig openAi;
@@ -61,6 +63,7 @@ public final class DeepAgentConfig {
 
     private DeepAgentConfig(Builder b, DeepAgentFlowRecorder stderrFlowRecorder) {
         this.workspace = Objects.requireNonNull(b.workspace, "workspace");
+        this.memorySources = List.copyOf(b.memorySources);
         this.skillSourceRoots = List.copyOf(b.skillSourceRoots);
         this.subAgents = List.copyOf(b.subAgents);
         this.openAi = b.openAi;
@@ -76,6 +79,14 @@ public final class DeepAgentConfig {
 
     public Path workspace() {
         return workspace;
+    }
+
+    /**
+     * Paths to memory files (e.g. {@code AGENTS.md}), relative to {@link #workspace()} or absolute under that root.
+     * Loaded at agent creation and injected into the orchestrator and sub-agent system prompts when non-empty.
+     */
+    public List<Path> memorySources() {
+        return memorySources;
     }
 
     public List<Path> skillSourceRoots() {
@@ -149,6 +160,7 @@ public final class DeepAgentConfig {
 
     public static final class Builder {
         private Path workspace;
+        private final List<Path> memorySources = new ArrayList<>();
         private final List<Path> skillSourceRoots = new ArrayList<>();
         private final List<SubAgentDefinition> subAgents = new ArrayList<>();
         private OpenAiChatModelConfig openAi;
@@ -165,6 +177,23 @@ public final class DeepAgentConfig {
 
         public Builder workspace(Path path) {
             this.workspace = path;
+            return this;
+        }
+
+        /**
+         * Adds a memory/context file to load (e.g. {@code Path.of(".deepagents/AGENTS.md")}). Order is preserved;
+         * later files appear after earlier ones in the prompt. Each path must resolve under {@link #workspace(Path)}.
+         */
+        public Builder addMemorySource(Path file) {
+            this.memorySources.add(Objects.requireNonNull(file));
+            return this;
+        }
+
+        public Builder memorySources(List<Path> paths) {
+            this.memorySources.clear();
+            if (paths != null) {
+                this.memorySources.addAll(paths);
+            }
             return this;
         }
 
