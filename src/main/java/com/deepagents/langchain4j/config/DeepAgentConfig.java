@@ -241,7 +241,7 @@ public final class DeepAgentConfig {
         }
 
         /**
-         * Prepended before the library default orchestrator prompt (same as {@link com.deepagents.langchain4j.DeepAgent.Builder#instructions(String)}).
+         * Prepended before the library default orchestrator prompt (and skills catalog when present).
          */
         public Builder instructions(String text) {
             this.orchestratorInstructions = text;

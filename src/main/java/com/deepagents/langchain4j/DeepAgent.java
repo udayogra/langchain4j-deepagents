@@ -4,7 +4,6 @@ import com.deepagents.langchain4j.config.DeepAgentConfig;
 import com.deepagents.langchain4j.flow.DeepAgentFlowListener;
 import com.deepagents.langchain4j.logging.ToolInvocationLogMode;
 import com.deepagents.langchain4j.logging.ToolInvocationLogger;
-import com.deepagents.langchain4j.config.OpenAiChatModelConfig;
 import com.deepagents.langchain4j.files.FileToolFactory;
 import com.deepagents.langchain4j.files.WorkspaceFileOperations;
 import com.deepagents.langchain4j.skills.SkillMetadata;
@@ -33,10 +32,9 @@ import java.util.Objects;
 
 /**
  * Wires an orchestrator {@link AiServices} with todos, workspace files, and a {@code task} tool (sub-agents).
- * Optional {@link DeepAgentConfig#additionalTools()} (or the {@code additionalTools} argument on
- * {@link #create(ChatModel, Path, List, List, int, int, Map)}) are merged with those built-ins on the main agent and
- * shared with every sub-agent; use {@link SubAgentDefinition#extraTools()} for per-sub-agent tools only.
- * Pure LangChain4j — no Spring AI.
+ * Use {@link #create(DeepAgentConfig)} as the single entry point. Optional {@link DeepAgentConfig#additionalTools()}
+ * are merged with built-ins on the main agent and shared with every sub-agent; use {@link SubAgentDefinition#extraTools()}
+ * for per-sub-agent tools only. Pure LangChain4j — no Spring AI.
  *
  * <p>Todos are scoped by {@code @MemoryId} (same string you pass to {@link Orchestrator#chat(Object, String)}): each
  * session id gets its own {@link com.deepagents.langchain4j.todos.TodoStore}. The workspace directory is still shared;
@@ -86,93 +84,6 @@ public final class DeepAgent {
                 config.orchestratorInstructions(),
                 config.toolInvocationLogMode(),
                 config.flowListener());
-    }
-
-    /**
-     * @param workspace sandbox root for file tools (created if missing)
-     * @param extraSubAgents additional specialists (names must not be {@code general-purpose})
-     */
-    public static Orchestrator create(ChatModel model, Path workspace, List<SubAgentDefinition> extraSubAgents)
-            throws java.io.IOException {
-        return create(model, workspace, List.of(), extraSubAgents);
-    }
-
-    /**
-     * Same as {@link #create(ChatModel, Path, List)} but discovers optional skills under {@code skillSourceRoots}
-     * (directories whose immediate subfolders contain {@code SKILL.md}). Catalog text is appended to the orchestrator and
-     * sub-agent system prompts (progressive disclosure); the model loads full instructions with {@code read_file}.
-     *
-     * @param skillSourceRoots roots to scan, each must resolve inside {@code workspace}; empty skips skills
-     */
-    public static Orchestrator create(
-            ChatModel model,
-            Path workspace,
-            List<Path> skillSourceRoots,
-            List<SubAgentDefinition> extraSubAgents)
-            throws java.io.IOException {
-        return create(
-                model,
-                workspace,
-                skillSourceRoots,
-                extraSubAgents,
-                DeepAgentConfig.DEFAULT_CHAT_MEMORY_MAX_MESSAGES,
-                DeepAgentConfig.DEFAULT_MAX_SEQUENTIAL_TOOL_INVOCATIONS,
-                Map.of());
-    }
-
-    /**
-     * Same as {@link #create(ChatModel, Path, List, List)} with explicit orchestrator memory window and tool-step limit.
-     */
-    public static Orchestrator create(
-            ChatModel model,
-            Path workspace,
-            List<Path> skillSourceRoots,
-            List<SubAgentDefinition> extraSubAgents,
-            int chatMemoryMaxMessages,
-            int maxSequentialToolInvocations)
-            throws java.io.IOException {
-        return create(
-                model,
-                workspace,
-                skillSourceRoots,
-                extraSubAgents,
-                chatMemoryMaxMessages,
-                maxSequentialToolInvocations,
-                Map.of());
-    }
-
-    /**
-     * Full constructor-path: same as {@link #create(ChatModel, Path, List, List, int, int)} plus {@code additionalTools}
-     * merged into the orchestrator and every sub-agent (same role as {@link DeepAgentConfig#additionalTools()}).
-     */
-    public static Orchestrator create(
-            ChatModel model,
-            Path workspace,
-            List<Path> skillSourceRoots,
-            List<SubAgentDefinition> extraSubAgents,
-            int chatMemoryMaxMessages,
-            int maxSequentialToolInvocations,
-            Map<ToolSpecification, ToolExecutor> additionalTools)
-            throws java.io.IOException {
-        return createImpl(
-                model,
-                workspace,
-                skillSourceRoots,
-                extraSubAgents,
-                chatMemoryMaxMessages,
-                maxSequentialToolInvocations,
-                additionalTools,
-                null,
-                DeepAgentConfig.DEFAULT_TOOL_INVOCATION_LOG_MODE,
-                null);
-    }
-
-    /**
-     * Fluent builder (similar ergonomics to other Deep Agents Java APIs): {@link SubAgent#builder()} for specialists,
-     * then {@link #builder()} for workspace, model, optional {@link Builder#instructions(String)}, and shared tools.
-     */
-    public static Builder builder() {
-        return new Builder();
     }
 
     private static Orchestrator createImpl(
@@ -320,7 +231,8 @@ public final class DeepAgent {
     }
 
     /**
-     * Declarative sub-agent spec; {@link #builder()} produces a {@link SubAgentDefinition} for {@link Builder#subAgents(List)}.
+     * Declarative sub-agent spec; {@link #builder()} produces a {@link SubAgentDefinition} for
+     * {@link com.deepagents.langchain4j.config.DeepAgentConfig.Builder#subAgents(List)}.
      */
     public static final class SubAgent {
 
@@ -385,142 +297,6 @@ public final class DeepAgent {
                 }
                 return new SubAgentDefinition(name, description, prompt, builtInFileTools, Map.copyOf(extraTools));
             }
-        }
-    }
-
-    /** Builds an {@link Orchestrator} in one chain; throws {@link java.io.IOException} for workspace/skills scan. */
-    public static final class Builder {
-        private Path workspace;
-        private String instructions;
-        private final List<Path> skillSourceRoots = new ArrayList<>();
-        private final List<SubAgentDefinition> subAgents = new ArrayList<>();
-        private OpenAiChatModelConfig openAi;
-        private ChatModel chatModel;
-        private int chatMemoryMaxMessages = DeepAgentConfig.DEFAULT_CHAT_MEMORY_MAX_MESSAGES;
-        private int maxSequentialToolInvocations = DeepAgentConfig.DEFAULT_MAX_SEQUENTIAL_TOOL_INVOCATIONS;
-        private final LinkedHashMap<ToolSpecification, ToolExecutor> additionalTools = new LinkedHashMap<>();
-        private ToolInvocationLogMode toolInvocationLogMode = DeepAgentConfig.DEFAULT_TOOL_INVOCATION_LOG_MODE;
-        private DeepAgentFlowListener flowListener;
-
-        private Builder() {}
-
-        public Builder workspace(Path path) {
-            this.workspace = Objects.requireNonNull(path, "workspace");
-            return this;
-        }
-
-        /**
-         * Prepended before the default Deep Agents orchestrator system text (and before the skills catalog), like Python
-         * {@code create_deep_agent(system_prompt=..., ...)}.
-         */
-        public Builder instructions(String text) {
-            this.instructions = text;
-            return this;
-        }
-
-        public Builder addSkillSourceRoot(Path root) {
-            this.skillSourceRoots.add(Objects.requireNonNull(root));
-            return this;
-        }
-
-        public Builder skillSourceRoots(List<Path> roots) {
-            this.skillSourceRoots.clear();
-            if (roots != null) {
-                this.skillSourceRoots.addAll(roots);
-            }
-            return this;
-        }
-
-        public Builder addSubAgent(SubAgentDefinition def) {
-            this.subAgents.add(Objects.requireNonNull(def));
-            return this;
-        }
-
-        public Builder subAgents(List<SubAgentDefinition> defs) {
-            this.subAgents.clear();
-            if (defs != null) {
-                this.subAgents.addAll(defs);
-            }
-            return this;
-        }
-
-        public Builder openAi(OpenAiChatModelConfig config) {
-            if (this.chatModel != null) {
-                throw new IllegalStateException("Already set chatModel(...); use only one of openAi or chatModel.");
-            }
-            this.openAi = Objects.requireNonNull(config);
-            return this;
-        }
-
-        public Builder chatModel(ChatModel model) {
-            if (this.openAi != null) {
-                throw new IllegalStateException("Already set openAi(...); use only one of openAi or chatModel.");
-            }
-            this.chatModel = Objects.requireNonNull(model);
-            return this;
-        }
-
-        public Builder chatMemoryMaxMessages(int max) {
-            if (max < 1) {
-                throw new IllegalArgumentException("chatMemoryMaxMessages must be >= 1");
-            }
-            this.chatMemoryMaxMessages = max;
-            return this;
-        }
-
-        public Builder maxSequentialToolInvocations(int max) {
-            if (max < 1) {
-                throw new IllegalArgumentException("maxSequentialToolInvocations must be >= 1");
-            }
-            this.maxSequentialToolInvocations = max;
-            return this;
-        }
-
-        /** Shared tools for the orchestrator and every sub-agent (same as {@link DeepAgentConfig.Builder#additionalTools(Map)}). */
-        public Builder tools(Map<ToolSpecification, ToolExecutor> map) {
-            this.additionalTools.clear();
-            if (map != null) {
-                this.additionalTools.putAll(map);
-            }
-            return this;
-        }
-
-        public Builder addTool(ToolSpecification spec, ToolExecutor executor) {
-            this.additionalTools.put(Objects.requireNonNull(spec), Objects.requireNonNull(executor));
-            return this;
-        }
-
-        public Builder toolInvocationLogMode(ToolInvocationLogMode mode) {
-            this.toolInvocationLogMode = Objects.requireNonNull(mode, "toolInvocationLogMode");
-            return this;
-        }
-
-        public Builder flowListener(DeepAgentFlowListener listener) {
-            this.flowListener = listener;
-            return this;
-        }
-
-        public Orchestrator build() throws java.io.IOException {
-            Objects.requireNonNull(workspace, "workspace");
-            ChatModel model;
-            if (chatModel != null) {
-                model = chatModel;
-            } else if (openAi != null) {
-                model = openAi.toChatModel();
-            } else {
-                throw new IllegalStateException("Set exactly one of chatModel(...) or openAi(...).");
-            }
-            return createImpl(
-                    model,
-                    workspace,
-                    skillSourceRoots,
-                    subAgents,
-                    chatMemoryMaxMessages,
-                    maxSequentialToolInvocations,
-                    Map.copyOf(additionalTools),
-                    instructions,
-                    toolInvocationLogMode,
-                    flowListener);
         }
     }
 }
